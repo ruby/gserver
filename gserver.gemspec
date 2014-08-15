@@ -6,10 +6,10 @@ require 'gserver/version'
 Gem::Specification.new do |spec|
   spec.name          = "gserver"
   spec.version       = Gserver::VERSION
-  spec.authors       = ["SHIBATA Hiroshi"]
+  spec.authors       = ["John W. Small", "SHIBATA Hiroshi"]
   spec.email         = ["hsbt@ruby-lang.org"]
-  spec.summary       = %q{TODO: Write a short summary. Required.}
-  spec.description   = %q{TODO: Write a longer description. Optional.}
+  spec.summary       = %q{GServer implements a generic server}
+  spec.description   = %q{GServer implements a generic server}
   spec.homepage      = ""
   spec.license       = "Ruby"
 
