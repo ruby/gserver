@@ -158,7 +158,7 @@ class GServer
   #
   # +client+:: a TCPSocket instance representing the client that connected
   #
-  # Return true to allow this client to connect, false to prevent it.
+  # Return true to allow this client to be served, false to prevent it.
   def connecting(client)
     addr = client.peeraddr
     log("#{self.class} #{@host}:#{@port} client:#{addr[1]} " +
@@ -167,9 +167,9 @@ class GServer
   end
 
 
-  # Called when a client disconnects, if audition is enabled.
+  # Called when a client disconnects, if auditing is enabled.
   #
-  # +clientPort+:: the port of the client that is connecting
+  # +clientPort+:: the port of the client that is disconnecting
   def disconnecting(clientPort)
     log("#{self.class} #{@host}:#{@port} " +
       "client:#{clientPort} disconnect")
@@ -242,7 +242,7 @@ class GServer
     raise "server is already running" if !stopped?
     @shutdown = false
     @maxConnections = maxConnections if maxConnections > 0
-    @@servicesMutex.synchronize  {
+    @@servicesMutex.synchronize {
       if GServer.in_service?(@port,@host)
         raise "Port already in use: #{host}:#{@port}!"
       end
@@ -255,14 +255,16 @@ class GServer
       begin
         starting if @audit
         while !@shutdown
-          @connectionsMutex.synchronize  {
-             while @connections.size >= @maxConnections
-               @connectionsCV.wait(@connectionsMutex)
-             end
+          connection = []
+          @connectionsMutex.synchronize {
+            while @connections.size >= @maxConnections
+              @connectionsCV.wait(@connectionsMutex)
+            end
+            @connections << connection
           }
           client = @tcpServer.accept
-          Thread.new(client)  { |myClient|
-            @connections << Thread.current
+          Thread.new(client, connection) { |myClient, myConnection|
+            myConnection << Thread.current
             begin
               myPort = myClient.peeraddr[1]
               serve(myClient) if !@audit or connecting(myClient)
@@ -274,7 +276,7 @@ class GServer
               rescue
               end
               @connectionsMutex.synchronize {
-                @connections.delete(Thread.current)
+                @connections.delete(myConnection)
                 @connectionsCV.signal
               }
               disconnecting(myPort) if @audit
@@ -289,13 +291,13 @@ class GServer
         rescue
         end
         if @shutdown
-          @connectionsMutex.synchronize  {
-             while @connections.size > 0
-               @connectionsCV.wait(@connectionsMutex)
-             end
+          @connectionsMutex.synchronize {
+            while @connections.size > 0
+              @connectionsCV.wait(@connectionsMutex)
+            end
           }
         else
-          @connections.each { |c| c.raise "stop" }
+          @connections.each { |(c)| c&.raise "stop" }
         end
         @tcpServerThread = nil
         @@servicesMutex.synchronize  {
